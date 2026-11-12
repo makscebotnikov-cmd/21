@@ -30,6 +30,19 @@ Hey, Netology
 
 ## Ответ 
 
+Dockerfile:
+```dockerfile
+FROM nginx:1.21.1
+COPY index.html /usr/share/nginx/html/index.html
+```
+
+Сборка и публикация образа в мой репозиторий Docker Hub:
+```bash
+docker login -u ЛОГИН_DOCKERHUB
+docker build -t ЛОГИН_DOCKERHUB/custom-nginx:1.0.0 .
+docker push ЛОГИН_DOCKERHUB/custom-nginx:1.0.0
+```
+
 <img width="625" height="135" alt="1" src="https://github.com/user-attachments/assets/1420ddcb-b713-44c5-b331-bf64b47888ab" />
 
 
@@ -45,7 +58,7 @@ Hey, Netology
 
 ---
 
-Ссылка: https://hub.docker.com/repository/docker/takarigua/custom-nginx/general
+Ссылка: https://hub.docker.com/repository/docker/ЛОГИН_DOCKERHUB/custom-nginx/general
 
 ---
 
@@ -90,10 +103,20 @@ Hey, Netology
 
 ---
 
+**Пункт 3. Почему контейнер остановился.**
+
+Командой `docker attach custom-nginx-t2` я подключился к стандартным потокам ввода/вывода не «контейнера вообще», а его главного процесса — того, что запущен с PID 1. В образе nginx это мастер-процесс `nginx -g 'daemon off;'`. По умолчанию `docker attach` пробрасывает сигналы в контейнер (`--sig-proxy=true`), поэтому нажатие Ctrl-C отправило сигнал SIGINT прямо мастер-процессу nginx. Получив SIGINT, nginx выполняет быстрое завершение работы и выходит.
+
+Контейнер живёт ровно столько, сколько живёт его процесс с PID 1. Как только nginx завершился, Docker перевёл контейнер в состояние `Exited`, что и видно в `docker ps -a`. Чтобы отключиться, не останавливая контейнер, нужно было использовать комбинацию Ctrl-P, Ctrl-Q или подключаться с `docker attach --sig-proxy=false`.
+
+---
+
 <img width="1829" height="554" alt="6" src="https://github.com/user-attachments/assets/e941dbe6-70ea-4e17-9d26-db434124c478" />
 
 
 ---
+
+**Пункт 10. Суть проблемы.**
 
 После изменения порта Nginx на 81 в контейнере, Docker продолжал пробрасывать трафик с хостового 8080 на порт 80 контейнера, который более не использовался. Это привело к ошибке соединения. Для исправления нужно либо вернуть listen 80 в конфиге Nginx, либо изменить проброс портов при запуске контейнера.
 
@@ -167,11 +190,56 @@ services:
 
 ## Ответ 
 
-Пояснение: В моей системе оказалась установлена standalone-версия Docker Compose (v2.34.0), а не интегрированный плагин Docker. Поэтому команда docker compose (без дефиса) не работала. Для совместимости я использовал традиционный формат docker-compose с явным указанием файла через флаг -f
+Сначала у меня была установлена только standalone-версия Docker Compose (v2.34.0), и команда `docker compose` (через пробел) не работала. Я подключил тот же бинарник как плагин Docker CLI, после чего `docker compose` заработала:
+```bash
+mkdir -p ~/.docker/cli-plugins
+ln -s "$(which docker-compose)" ~/.docker/cli-plugins/docker-compose
+docker compose version
+```
+Все команды ниже запускаются **без ключа `-f`**: Compose сам выбирает файл в текущем каталоге.
 
+**Пункт 1. Какой файл запустился и почему.**
+
+```bash
+cd /tmp/netology/docker/task5
+docker compose up -d
+```
+
+Запустился файл `compose.yaml`, то есть поднялся только сервис **portainer**, а `registry` из `docker-compose.yaml` не запустился.
+
+Причина в приоритете имён файлов. Когда ключ `-f` не указан, Compose ищет файл в рабочем каталоге в строгом порядке: `compose.yaml` → `compose.yml` → `docker-compose.yaml` → `docker-compose.yml`. Берётся первый найденный файл, остальные игнорируются. `compose.yaml` — это каноническое, «новое» имя по спецификации Compose, а `docker-compose.yaml` поддерживается только ради обратной совместимости, поэтому у него приоритет ниже. Compose сам сообщает об этом предупреждением: `Found multiple config files with supported names: compose.yaml, docker-compose.yaml. Using compose.yaml`.
+
+Ключом `-f` этот механизм как раз отключается — файл задаётся вручную, и приоритет имён уже не участвует. Поэтому здесь `-f` не используется.
+
+**Пункт 2. Запуск обоих файлов через include.**
+
+Итоговый `compose.yaml`:
+```yaml
+include:
+  - docker-compose.yaml
+
+services:
+  portainer:
+    network_mode: host
+    image: portainer/portainer-ce:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+(Строку `version` я убрал: в Compose v2 она устарела и только вызывает предупреждение `the attribute version is obsolete`.)
+
+```bash
+docker compose up -d
+docker compose ps
+```
 
 <img width="1862" height="914" alt="8" src="https://github.com/user-attachments/assets/10e2d3b6-d26f-4555-a997-42ab214589e4" />
 
+**Пункт 3. Загрузка образа в локальный registry.**
+```bash
+docker tag ЛОГИН_DOCKERHUB/custom-nginx:1.0.0 127.0.0.1:5000/custom-nginx:latest
+docker push 127.0.0.1:5000/custom-nginx:latest
+curl http://127.0.0.1:5000/v2/_catalog
+```
 
 ---
 
@@ -187,6 +255,30 @@ services:
 
 <img width="1526" height="892" alt="11" src="https://github.com/user-attachments/assets/f1554319-f00c-47a4-8601-63a7ac47b376" />
 
+
+---
+
+**Пункт 7. Warning после удаления compose.yaml.**
+
+```bash
+rm compose.yaml
+docker compose up -d
+```
+
+Compose выдал предупреждение:
+`WARN[0000] Found orphan containers ([task5-portainer-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.`
+
+Суть предупреждения. Compose связывает контейнеры с проектом по имени проекта (по умолчанию это имя каталога, `task5`) — на каждом контейнере стоит метка `com.docker.compose.project=task5`. После удаления `compose.yaml` Compose по приоритету имён взял `docker-compose.yaml`, где описан только `registry`. Контейнер `portainer` при этом остался запущенным и по-прежнему помечен как часть проекта `task5`, но в текущей конфигурации его уже нет. Такой контейнер называется «осиротевшим» (orphan). Compose сам его не трогает, а только предупреждает и предлагает убрать ключом `--remove-orphans`.
+
+Выполняю предложенное действие:
+```bash
+docker compose up -d --remove-orphans
+```
+
+Гашу проект одной командой:
+```bash
+docker compose down
+```
 
 ---
 
