@@ -38,9 +38,9 @@ COPY index.html /usr/share/nginx/html/index.html
 
 Сборка и публикация образа в мой репозиторий Docker Hub:
 ```bash
-docker login -u ЛОГИН_DOCKERHUB
-docker build -t ЛОГИН_DOCKERHUB/custom-nginx:1.0.0 .
-docker push ЛОГИН_DOCKERHUB/custom-nginx:1.0.0
+docker login -u chebtnik
+docker build -t chebtnik/custom-nginx:1.0.0 .
+docker push chebtnik/custom-nginx:1.0.0
 ```
 
 <img width="625" height="135" alt="1" src="https://github.com/user-attachments/assets/1420ddcb-b713-44c5-b331-bf64b47888ab" />
@@ -58,7 +58,7 @@ docker push ЛОГИН_DOCKERHUB/custom-nginx:1.0.0
 
 ---
 
-Ссылка: https://hub.docker.com/repository/docker/ЛОГИН_DOCKERHUB/custom-nginx/general
+Ссылка: https://hub.docker.com/repository/docker/chebtnik/custom-nginx/general
 
 ---
 
@@ -236,7 +236,7 @@ docker compose ps
 
 **Пункт 3. Загрузка образа в локальный registry.**
 ```bash
-docker tag ЛОГИН_DOCKERHUB/custom-nginx:1.0.0 127.0.0.1:5000/custom-nginx:latest
+docker tag chebtnik/custom-nginx:1.0.0 127.0.0.1:5000/custom-nginx:latest
 docker push 127.0.0.1:5000/custom-nginx:latest
 curl http://127.0.0.1:5000/v2/_catalog
 ```
