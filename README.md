@@ -7,6 +7,12 @@
 3. Своё решение к задачам оформите в вашем GitHub репозитории в формате markdown!!!
 4. В личном кабинете отправьте на проверку ссылку на .md-файл в вашем репозитории.
 
+> **Окружение.** Задание выполнено на MacBook (macOS, Apple Silicon) с Docker Desktop (Engine 29.9.3, Docker Compose v2 — команда `docker compose`).
+> Отличия от Linux, которые видны на скриншотах:
+> - на macOS нет утилиты `ss`, вместо `ss -tlpn | grep 127.0.0.1:8080` использован `lsof -nP -iTCP:8080 -sTCP:LISTEN`;
+> - `date` в macOS не поддерживает `%N`;
+> - порт 5000 на macOS по умолчанию занят службой AirPlay Receiver — для задания 5 она была отключена.
+
 ## Задача 1
 
 Сценарий выполнения задачи:
@@ -36,29 +42,20 @@ FROM nginx:1.21.1
 COPY index.html /usr/share/nginx/html/index.html
 ```
 
-Сборка и публикация образа в мой репозиторий Docker Hub:
 ```bash
-docker login -u chebtnik
+docker pull nginx:1.21.1
 docker build -t chebtnik/custom-nginx:1.0.0 .
+docker login -u chebtnik
 docker push chebtnik/custom-nginx:1.0.0
 ```
 
-<img width="625" height="135" alt="1" src="https://github.com/user-attachments/assets/1420ddcb-b713-44c5-b331-bf64b47888ab" />
+![Сборка образа](screens/01.png)
 
+![Push в Docker Hub](screens/02.png)
 
----
+![Репозиторий на Docker Hub](screens/03.png)
 
-<img width="1078" height="807" alt="2" src="https://github.com/user-attachments/assets/dd1d0ce0-3a1d-4ec1-9b13-2c9b374c3c03" />
-
-
----
-
-<img width="1980" height="938" alt="3" src="https://github.com/user-attachments/assets/59386c44-03d8-4948-b7b5-b0f913ce3678" />
-
-
----
-
-Ссылка: https://hub.docker.com/repository/docker/chebtnik/custom-nginx/general
+**Ссылка:** https://hub.docker.com/r/chebtnik/custom-nginx/tags (в личном кабинете: https://hub.docker.com/repository/docker/chebtnik/custom-nginx/general)
 
 ---
 
@@ -75,8 +72,14 @@ docker push chebtnik/custom-nginx:1.0.0
 
 ## Ответ 
 
-<img width="1171" height="438" alt="4" src="https://github.com/user-attachments/assets/33831cca-bde9-4cd1-8082-1c1d07141e8a" />
+```bash
+docker run -d --name chebotnikovmb-custom-nginx-t2 -p 127.0.0.1:8080:80 chebtnik/custom-nginx:1.0.0
+docker rename chebotnikovmb-custom-nginx-t2 custom-nginx-t2
+date +"%d-%m-%Y %T.%N %Z" ; sleep 0.150 ; docker ps ; lsof -nP -iTCP:8080 -sTCP:LISTEN ; docker logs custom-nginx-t2 -n1 ; docker exec -it custom-nginx-t2 base64 /usr/share/nginx/html/index.html
+curl http://127.0.0.1:8080
+```
 
+![Задача 2](screens/04.png)
 
 ---
 
@@ -98,32 +101,35 @@ docker push chebtnik/custom-nginx:1.0.0
 
 ## Ответ 
 
-<img width="1705" height="993" alt="5" src="https://github.com/user-attachments/assets/2720377e-61e7-45ba-9110-412dfe54e1a7" />
+```bash
+docker attach custom-nginx-t2   # затем Ctrl-C
+docker ps -a
+docker start custom-nginx-t2
+```
 
-
----
+![docker attach, Ctrl-C, docker ps -a, docker start](screens/05.png)
 
 **Пункт 3. Почему контейнер остановился.**
 
-Командой `docker attach custom-nginx-t2` я подключился к стандартным потокам ввода/вывода не «контейнера вообще», а его главного процесса — того, что запущен с PID 1. В образе nginx это мастер-процесс `nginx -g 'daemon off;'`. По умолчанию `docker attach` пробрасывает сигналы в контейнер (`--sig-proxy=true`), поэтому нажатие Ctrl-C отправило сигнал SIGINT прямо мастер-процессу nginx. Получив SIGINT, nginx выполняет быстрое завершение работы и выходит.
+Командой `docker attach custom-nginx-t2` я подключился к стандартным потокам ввода/вывода не «контейнера вообще», а его главного процесса — того, что запущен с PID 1. В образе nginx это мастер-процесс `nginx -g 'daemon off;'`. По умолчанию `docker attach` пробрасывает сигналы в контейнер (`--sig-proxy=true`), поэтому нажатие Ctrl-C отправило сигнал SIGINT прямо мастер-процессу nginx. Получив SIGINT, nginx завершил рабочие процессы и сам вышел — в логе это видно по строкам `worker process ... exited with code 0` и `1#1: exit`.
 
-Контейнер живёт ровно столько, сколько живёт его процесс с PID 1. Как только nginx завершился, Docker перевёл контейнер в состояние `Exited`, что и видно в `docker ps -a`. Чтобы отключиться, не останавливая контейнер, нужно было использовать комбинацию Ctrl-P, Ctrl-Q или подключаться с `docker attach --sig-proxy=false`.
-
----
-
-<img width="1829" height="554" alt="6" src="https://github.com/user-attachments/assets/e941dbe6-70ea-4e17-9d26-db434124c478" />
-
+Контейнер живёт ровно столько, сколько живёт его процесс с PID 1. Как только nginx завершился, Docker перевёл контейнер в состояние `Exited (0)`, что и видно в `docker ps -a`. Чтобы отключиться, не останавливая контейнер, нужно было использовать комбинацию Ctrl-P, Ctrl-Q или подключаться с `docker attach --sig-proxy=false`.
 
 ---
+
+Пункты 5–10: в контейнере установлен редактор nano (`apt-get install nano`; в образе nginx:1.21.1 Debian buster, поэтому источники apt переключены на archive.debian.org), в `/etc/nginx/conf.d/default.conf` строка `listen 80;` заменена на `listen 81;`, выполнены `nginx -s reload`, `curl http://127.0.0.1:80` (соединение отклонено) и `curl http://127.0.0.1:81` (страница отдаётся). Затем на хосте проверены порт, `docker port` и `curl http://127.0.0.1:8080`.
+
+![nano, listen 81, nginx -s reload, проверка портов](screens/06.png)
 
 **Пункт 10. Суть проблемы.**
 
-После изменения порта Nginx на 81 в контейнере, Docker продолжал пробрасывать трафик с хостового 8080 на порт 80 контейнера, который более не использовался. Это привело к ошибке соединения. Для исправления нужно либо вернуть listen 80 в конфиге Nginx, либо изменить проброс портов при запуске контейнера.
+Docker пробрасывает порт хоста `127.0.0.1:8080` на порт **80** контейнера — это видно в `docker port custom-nginx-t2` (`80/tcp -> 127.0.0.1:8080`), и Docker продолжает слушать 8080 на хосте. Но после правки конфига и `nginx -s reload` nginx внутри контейнера слушает уже порт **81**, а на 80 никого нет. Поэтому запрос на 8080 доходит до контейнера, но там его некому принять — `curl: (52) Empty reply from server`. Исправить можно, либо вернув `listen 80` в конфиге nginx, либо изменив проброс портов на `8080 -> 81`.
+
+Пункт 12 — удаление работающего контейнера без остановки: `docker rm -f custom-nginx-t2` (ключ `-f` посылает контейнеру SIGKILL и сразу удаляет его, отдельный `docker stop` не нужен).
 
 ---
 
 ## Задача 4
-
 
 - Запустите первый контейнер из образа ***centos*** c любым тегом в фоновом режиме, подключив папку  текущий рабочий каталог ```$(pwd)``` на хостовой машине в ```/data``` контейнера, используя ключ -v.
 - Запустите второй контейнер из образа ***debian*** в фоновом режиме, подключив текущий рабочий каталог ```$(pwd)``` в ```/data``` контейнера. 
@@ -131,13 +137,13 @@ docker push chebtnik/custom-nginx:1.0.0
 - Добавьте ещё один файл в текущий каталог ```$(pwd)``` на хостовой машине.
 - Подключитесь во второй контейнер и отобразите листинг и содержание файлов в ```/data``` контейнера.
 
-
 В качестве ответа приложите скриншоты консоли, где видно все введенные команды и их вывод.
 
 ## Ответ 
 
-<img width="1429" height="650" alt="7" src="https://github.com/user-attachments/assets/8665bfff-2ba4-47dd-b5ee-7a914639a8df" />
+![Задача 4](screens/07.png)
 
+Файл, созданный в контейнере CentOS, и файл, созданный на хосте, видны во втором контейнере (Debian), потому что оба контейнера смонтировали один и тот же каталог хоста в `/data`.
 
 ---
 
@@ -190,26 +196,15 @@ services:
 
 ## Ответ 
 
-Сначала у меня была установлена только standalone-версия Docker Compose (v2.34.0), и команда `docker compose` (через пробел) не работала. Я подключил тот же бинарник как плагин Docker CLI, после чего `docker compose` заработала:
-```bash
-mkdir -p ~/.docker/cli-plugins
-ln -s "$(which docker-compose)" ~/.docker/cli-plugins/docker-compose
-docker compose version
-```
-Все команды ниже запускаются **без ключа `-f`**: Compose сам выбирает файл в текущем каталоге.
+Все команды выполнены в каталоге `~/netology-hw4/task5` **без ключа `-f`** — Compose сам выбирает файл.
 
 **Пункт 1. Какой файл запустился и почему.**
 
-```bash
-cd /tmp/netology/docker/task5
-docker compose up -d
-```
+![docker compose up -d с двумя файлами](screens/08.png)
 
-Запустился файл `compose.yaml`, то есть поднялся только сервис **portainer**, а `registry` из `docker-compose.yaml` не запустился.
+Запустился файл `compose.yaml` — поднялся только сервис **portainer**, а `registry` из `docker-compose.yaml` не запустился. Compose прямо пишет об этом: `Found multiple config files with supported names: .../compose.yaml, .../docker-compose.yaml` и `Using .../compose.yaml`.
 
-Причина в приоритете имён файлов. Когда ключ `-f` не указан, Compose ищет файл в рабочем каталоге в строгом порядке: `compose.yaml` → `compose.yml` → `docker-compose.yaml` → `docker-compose.yml`. Берётся первый найденный файл, остальные игнорируются. `compose.yaml` — это каноническое, «новое» имя по спецификации Compose, а `docker-compose.yaml` поддерживается только ради обратной совместимости, поэтому у него приоритет ниже. Compose сам сообщает об этом предупреждением: `Found multiple config files with supported names: compose.yaml, docker-compose.yaml. Using compose.yaml`.
-
-Ключом `-f` этот механизм как раз отключается — файл задаётся вручную, и приоритет имён уже не участвует. Поэтому здесь `-f` не используется.
+Причина в приоритете имён файлов. Когда ключ `-f` не указан, Compose ищет файл в рабочем каталоге в строгом порядке: `compose.yaml` → `compose.yml` → `docker-compose.yaml` → `docker-compose.yml`. Берётся первый найденный файл, остальные игнорируются. `compose.yaml` — каноническое имя по спецификации Compose, а `docker-compose.yaml` поддерживается только ради обратной совместимости, поэтому у него приоритет ниже. Ключ `-f` этот механизм отключает (файл задаётся вручную), поэтому здесь он не используется.
 
 **Пункт 2. Запуск обоих файлов через include.**
 
@@ -227,12 +222,7 @@ services:
 ```
 (Строку `version` я убрал: в Compose v2 она устарела и только вызывает предупреждение `the attribute version is obsolete`.)
 
-```bash
-docker compose up -d
-docker compose ps
-```
-
-<img width="1862" height="914" alt="8" src="https://github.com/user-attachments/assets/10e2d3b6-d26f-4555-a997-42ab214589e4" />
+![include: запущены portainer и registry](screens/09.png)
 
 **Пункт 3. Загрузка образа в локальный registry.**
 ```bash
@@ -241,22 +231,19 @@ docker push 127.0.0.1:5000/custom-nginx:latest
 curl http://127.0.0.1:5000/v2/_catalog
 ```
 
----
+![push в локальный registry](screens/10.png)
 
-<img width="1841" height="616" alt="9" src="https://github.com/user-attachments/assets/ca95ae24-44f3-42e3-bc76-2b57d628d093" />
+**Пункт 4. Начальная настройка Portainer** (создан администратор `admin`):
 
+![Portainer после начальной настройки](screens/11.png)
 
----
+**Пункт 5. Стек `chebotnikov`, задеплоенный через Web editor** — контейнер `chebotnikov-nginx-1` из образа `127.0.0.1:5000/custom-nginx` запущен:
 
-<img width="1689" height="818" alt="10" src="https://github.com/user-attachments/assets/1c9eddbf-4703-4703-a57c-d498a3c20e7b" />
+![Задеплоенный стек в Portainer](screens/12.png)
 
+**Пункт 6. Inspect контейнера, Tree, раскрыт Config — от AppArmorProfile до Driver:**
 
----
-
-<img width="1526" height="892" alt="11" src="https://github.com/user-attachments/assets/f1554319-f00c-47a4-8601-63a7ac47b376" />
-
-
----
+![Inspect от AppArmorProfile до Driver](screens/13.png)
 
 **Пункт 7. Warning после удаления compose.yaml.**
 
@@ -265,20 +252,20 @@ rm compose.yaml
 docker compose up -d
 ```
 
+![warning про orphan containers](screens/14.png)
+
 Compose выдал предупреждение:
-`WARN[0000] Found orphan containers ([task5-portainer-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.`
+`Found orphan containers (task5-portainer-1) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up.`
 
-Суть предупреждения. Compose связывает контейнеры с проектом по имени проекта (по умолчанию это имя каталога, `task5`) — на каждом контейнере стоит метка `com.docker.compose.project=task5`. После удаления `compose.yaml` Compose по приоритету имён взял `docker-compose.yaml`, где описан только `registry`. Контейнер `portainer` при этом остался запущенным и по-прежнему помечен как часть проекта `task5`, но в текущей конфигурации его уже нет. Такой контейнер называется «осиротевшим» (orphan). Compose сам его не трогает, а только предупреждает и предлагает убрать ключом `--remove-orphans`.
+Суть предупреждения. Compose связывает контейнеры с проектом по имени проекта (по умолчанию это имя каталога, `task5`) — на каждом контейнере стоит метка `com.docker.compose.project=task5`. После удаления `compose.yaml` Compose по приоритету имён взял `docker-compose.yaml`, где описан только `registry`. Контейнер `task5-portainer-1` при этом остался запущенным и по-прежнему помечен как часть проекта `task5`, но в текущей конфигурации его уже нет. Такой контейнер называется «осиротевшим» (orphan). Compose сам его не трогает, а только предупреждает и предлагает убрать ключом `--remove-orphans`.
 
-Выполняю предложенное действие:
+Выполняю предложенное действие и гашу проект одной командой:
 ```bash
 docker compose up -d --remove-orphans
-```
-
-Гашу проект одной командой:
-```bash
 docker compose down
 ```
+
+![--remove-orphans и docker compose down](screens/15.png)
 
 ---
 
